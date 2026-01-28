@@ -7,26 +7,17 @@ warnings.filterwarnings("ignore")
 
 print(">>> Script started")
 
-# --------------------------------------------------
-# Paths
-# --------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = PROJECT_ROOT / "data" / "raw"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "processed"
 OUTPUT_PATH.mkdir(exist_ok=True)
 
-# --------------------------------------------------
-# Load datasets
-# --------------------------------------------------
 customers = pd.read_csv(DATA_PATH / "customers.csv")
 loans = pd.read_csv(DATA_PATH / "loans.csv")
 applications = pd.read_csv(DATA_PATH / "applications.csv")
 transactions = pd.read_csv(DATA_PATH / "transactions.csv")
 defaults = pd.read_csv(DATA_PATH / "defaults.csv")
 
-# --------------------------------------------------
-# Date parsing
-# --------------------------------------------------
 date_parsing_tasks = [
     (loans, ["Disbursal_Date", "Repayment_Start_Date", "Repayment_End_Date"]),
     (applications, ["Application_Date", "Approval_Date"]),
@@ -38,9 +29,6 @@ for df, cols in date_parsing_tasks:
     for col in cols:
         df[col] = pd.to_datetime(df[col], errors="coerce")
 
-# --------------------------------------------------
-# Default information
-# --------------------------------------------------
 defaults["Default_Flag"] = 1
 
 loan_defaults = defaults[
@@ -55,9 +43,6 @@ loan_defaults = defaults[
     ]
 ]
 
-# --------------------------------------------------
-# Create loan master (BASE TABLE)
-# --------------------------------------------------
 loan_master = loans.merge(
     loan_defaults,
     on="Loan_ID",
@@ -70,18 +55,12 @@ loan_master["Default_Flag"] = (
     .astype(int)
 )
 
-# --------------------------------------------------
-# Recovery metrics
-# --------------------------------------------------
 loan_master["Recovery_Rate"] = np.where(
     loan_master["Default_Flag"] == 1,
     loan_master["Recovery_Amount"] / loan_master["Default_Amount"],
     np.nan
 )
 
-# --------------------------------------------------
-# Application features (APPROVED ONLY)
-# --------------------------------------------------
 applications_approved = applications[
     applications["Approval_Status"] == "Approved"
 ]
@@ -105,9 +84,6 @@ loan_master["Processing_Time_Days"] = (
     loan_master["Approval_Date"] - loan_master["Application_Date"]
 ).dt.days
 
-# --------------------------------------------------
-# Customer features
-# --------------------------------------------------
 loan_master = loan_master.merge(
     customers,
     on="Customer_ID",
@@ -129,18 +105,11 @@ loan_master["Credit_Score_Band"] = pd.cut(
 loan_master["EMI_to_Income_Ratio"] = (
     loan_master["EMI_Amount"] * 12 / loan_master["Annual_Income"]
 )
-
-# --------------------------------------------------
-# Time-based features
-# --------------------------------------------------
 loan_master["Loan_Age_Months"] = (
     (pd.Timestamp.today() - loan_master["Disbursal_Date"])
     .dt.days / 30
 ).round(1)
 
-# --------------------------------------------------
-# Save output (robust & explicit)
-# --------------------------------------------------
 print("Feature engineering completed.")
 print("Final dataset shape:", loan_master.shape)
 
